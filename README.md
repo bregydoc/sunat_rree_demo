@@ -218,7 +218,7 @@ MIT License - Ver `LICENSE` para detalles.
 
 ## 📞 Contacto
 
-- **Autor**: Bregy Doc
+- **Autor**: Bregy Malpartida
 - **Proyecto**: Observatorio de Comercio Exterior del Perú
 - **Tecnologías**: Python, DuckDB, Streamlit, Plotly, Pandas
 
