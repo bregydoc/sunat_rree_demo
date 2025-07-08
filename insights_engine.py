@@ -143,17 +143,34 @@ def build_summary_insights(df_country: pd.DataFrame, df_products: pd.DataFrame) 
     # Top categoría (último año)
     products_latest = df_products[df_products['year'] == latest_year]
     if not products_latest.empty:
-        top_category = (products_latest.groupby('category')['exp'].sum()
-                       .sort_values(ascending=False)
-                       .index[0] if 'exp' in products_latest.columns 
-                       else "N/A")
-        top_value = (products_latest.groupby('category')['exp'].sum()
-                    .sort_values(ascending=False)
-                    .iloc[0] if 'exp' in products_latest.columns
-                    else 0)
+        # Determinar columna de exportaciones
+        exp_col = None
+        if 'exp' in products_latest.columns:
+            exp_col = 'exp'
+        elif 'export' in products_latest.columns:
+            exp_col = 'export'
+        
+        if exp_col and 'category' in products_latest.columns:
+            try:
+                category_sums = products_latest.groupby('category')[exp_col].sum().sort_values(ascending=False)
+                if not category_sums.empty:
+                    top_category = category_sums.index[0]
+                    top_value = category_sums.iloc[0]
+                else:
+                    top_category = "N/A"
+                    top_value = 0
+            except (KeyError, IndexError):
+                top_category = "N/A"
+                top_value = 0
+        else:
+            top_category = "N/A"
+            top_value = 0
     else:
         top_category = "N/A"
         top_value = 0
+    
+    # Calcular porcentaje de manera segura
+    percentage = (top_value/total_exp*100) if total_exp > 0 else 0
     
     executive_summary = f"""
 ## 📈 **Resumen Ejecutivo - {latest_year}**
@@ -164,7 +181,7 @@ def build_summary_insights(df_country: pd.DataFrame, df_products: pd.DataFrame) 
 
 ### 🏆 **Sector Líder**
 - **Top categoría:** {top_category}
-- **Valor:** US$ {_format_currency(top_value)} ({top_value/total_exp*100:.1f}% del total)
+- **Valor:** US$ {_format_currency(top_value)} ({percentage:.1f}% del total)
 
 ### 🎯 **Recomendación Estratégica**
 Enfocar recursos en diversificación dentro de {top_category} y desarrollo de mercados emergentes para reducir dependencia.
@@ -182,11 +199,38 @@ def get_quick_stats(df: pd.DataFrame) -> Dict[str, Any]:
     latest_year = df['year'].max()
     latest_data = df[df['year'] == latest_year]
     
+    # Determinar columna de exportaciones (puede ser 'exp' o 'export')
+    exp_col = None
+    if 'exp' in latest_data.columns:
+        exp_col = 'exp'
+    elif 'export' in latest_data.columns:
+        exp_col = 'export'
+    
+    # Determinar mejor mes de manera segura
+    mejor_mes = "N/A"
+    if exp_col and not latest_data.empty and 'month' in latest_data.columns:
+        try:
+            # Filtrar solo valores no nulos y positivos
+            valid_data = latest_data[latest_data[exp_col].notna() & (latest_data[exp_col] > 0)]
+            if not valid_data.empty:
+                mejor_mes = valid_data.loc[valid_data[exp_col].idxmax(), 'month']
+        except (KeyError, ValueError, IndexError):
+            mejor_mes = "N/A"
+    
+    # Determinar columna YoY
+    volatilidad = 0
+    if 'exp_yoy' in df.columns:
+        yoy_data = df['exp_yoy'].dropna()
+        volatilidad = yoy_data.std() if not yoy_data.empty else 0
+    elif '%YoY_exp' in df.columns:
+        yoy_data = df['%YoY_exp'].dropna()
+        volatilidad = yoy_data.std() if not yoy_data.empty else 0
+    
     stats = {
         "año_actual": latest_year,
         "categorías_activas": df['category'].nunique() if 'category' in df.columns else 0,
-        "mejor_mes": latest_data.loc[latest_data['exp'].idxmax(), 'month'] if 'exp' in latest_data.columns and not latest_data.empty else "N/A",
-        "volatilidad": df['exp_yoy'].std() if 'exp_yoy' in df.columns else 0
+        "mejor_mes": mejor_mes,
+        "volatilidad": volatilidad
     }
     
     return stats 
