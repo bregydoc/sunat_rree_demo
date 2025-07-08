@@ -123,7 +123,7 @@ def main():
         return
     
     # Pestañas para diferentes análisis
-    tab1, tab2, tab3 = st.tabs(["📊 Detalle", "🏷️ Análisis por Categorías", "🚀 Conclusiones"])
+    tab1, tab2, tab3 = st.tabs(["🇵🇪 Análisis por País", "🏷️ Análisis por Categorías", "🚀 Conclusiones"])
     
     with tab1:
         render_country_analysis(base_df, kpi_df, has_kpi)
