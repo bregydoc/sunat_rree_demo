@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 import duckdb
 from datetime import datetime, timedelta
 import numpy as np
+from insights_engine import build_insights, build_summary_insights, get_quick_stats
 
 # Configuración de página
 st.set_page_config(
@@ -122,7 +123,7 @@ def main():
         return
     
     # Pestañas para diferentes análisis
-    tab1, tab2 = st.tabs(["🇵🇪 Análisis por País", "🏷️ Análisis por Categorías"])
+    tab1, tab2, tab3 = st.tabs(["📊 Detalle", "🏷️ Análisis por Categorías", "🚀 Conclusiones"])
     
     with tab1:
         render_country_analysis(base_df, kpi_df, has_kpi)
@@ -133,6 +134,9 @@ def main():
         else:
             st.warning("❌ No hay datos de productos disponibles.")
             st.info("💡 Ejecuta: `uv run python observatorio/etl_products.py` para generar datos por categorías")
+    
+    with tab3:
+        render_insights_analysis(base_df, prod_df, kpi_df, kpi_prod_df, has_kpi, has_prod, has_prod_kpi)
 
 def render_country_analysis(base_df, kpi_df, has_kpi):
     """Renderizar análisis por país (datos agregados nacionales)"""
@@ -659,6 +663,173 @@ def render_category_analysis(prod_df, kpi_prod_df, has_prod_kpi):
             st.caption("✅ Con métricas KPI de productos")
         else:
             st.caption("⚠️ Datos base (ejecutar metrics_products.py para KPIs)")
+
+def render_insights_analysis(base_df, prod_df, kpi_df, kpi_prod_df, has_kpi, has_prod, has_prod_kpi):
+    """Renderizar análisis de conclusiones accionables"""
+    
+    st.header("🚀 Conclusiones Accionables")
+    st.markdown("*Insights generados automáticamente con recomendaciones específicas*")
+    
+    # ==============================================
+    # CONTROLES COMPARTIDOS DEL SIDEBAR
+    # ==============================================
+    
+    # Reutilizar filtros existentes
+    if has_prod and kpi_prod_df is not None:
+        # Usar datos de productos si están disponibles
+        df = kpi_prod_df if has_prod_kpi else prod_df
+        
+        # Preparar datos temporales
+        month_order = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+        ]
+        
+        df['month_num'] = df['month'].map({m: i+1 for i, m in enumerate(month_order)})
+        df = df.sort_values(['year', 'month_num', 'category']).reset_index(drop=True)
+        
+        # ==============================================
+        # RESUMEN EJECUTIVO
+        # ==============================================
+        
+        if base_df is not None and not base_df.empty:
+            st.subheader("📈 Resumen Ejecutivo")
+            
+            # Generar resumen de alto nivel
+            summary_insights = build_summary_insights(base_df, df)
+            
+            for summary in summary_insights:
+                st.markdown(summary)
+            
+            st.divider()
+        
+        # ==============================================
+        # INSIGHTS POR CATEGORÍAS
+        # ==============================================
+        
+        st.subheader("🔍 Insights por Categorías")
+        
+        # Obtener filtros actuales del sidebar (si existen)
+        try:
+            # Intentar usar los filtros de la pestaña de categorías si existen
+            year_range_insights = st.session_state.get('category_years', (df['year'].max()-2, df['year'].max()))
+            selected_categories_insights = st.session_state.get('selected_categories', df['category'].unique()[:5])
+        except:
+            # Filtros por defecto
+            year_range_insights = (df['year'].max()-2, df['year'].max())
+            selected_categories_insights = df['category'].unique()[:5]
+        
+        # Aplicar filtros
+        mask_insights = (df['year'].between(*year_range_insights)) & (df['category'].isin(selected_categories_insights))
+        df_filtered_insights = df[mask_insights].copy()
+        
+        if not df_filtered_insights.empty:
+            # Generar insights accionables
+            insights = build_insights(df_filtered_insights, top_n=3)
+            
+            # Mostrar insights
+            for insight in insights:
+                st.markdown(insight)
+                st.divider()
+            
+            # ==============================================
+            # ESTADÍSTICAS RÁPIDAS
+            # ==============================================
+            
+            st.subheader("📊 Estadísticas Rápidas")
+            
+            stats = get_quick_stats(df_filtered_insights)
+            
+            if "error" not in stats:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("📅 Año Actual", stats.get("año_actual", "N/A"))
+                
+                with col2:
+                    st.metric("🏷️ Categorías Activas", stats.get("categorías_activas", 0))
+                
+                with col3:
+                    st.metric("🚀 Mejor Mes", stats.get("mejor_mes", "N/A"))
+                
+                with col4:
+                    volatilidad = stats.get("volatilidad", 0)
+                    st.metric("📈 Volatilidad", f"{volatilidad:.1f}%")
+        else:
+            st.warning("❌ No hay datos suficientes para generar insights con los filtros actuales.")
+            st.info("💡 Ajusta los filtros en la pestaña de 'Análisis por Categorías' para ver más insights.")
+    
+    else:
+        # Fallback: usar datos generales si no hay datos de productos
+        st.warning("📊 **Datos de productos no disponibles**")
+        st.info("Para obtener insights detallados por categorías:")
+        st.code("uv run python observatorio/etl_products.py")
+        st.code("uv run python observatorio/metrics_products.py")
+        
+        if base_df is not None and not base_df.empty:
+            st.subheader("📈 Análisis General Básico")
+            
+            latest_year = base_df['year'].max()
+            latest_data = base_df[base_df['year'] == latest_year]
+            
+            if not latest_data.empty:
+                total_exp = latest_data['export'].sum() if 'export' in latest_data.columns else 0
+                total_imp = latest_data['import'].sum() if 'import' in latest_data.columns else 0
+                balance = total_exp - total_imp
+                
+                st.markdown(f"""
+                ### 🇵🇪 **Posición Nacional {latest_year}**
+                
+                **📊 Hallazgo:** Perú registró exportaciones por **US$ {format_currency(total_exp)}** en {latest_year}.
+                
+                **💰 Impacto:** Balance comercial de **US$ {format_currency(balance)}** ({'superávit' if balance > 0 else 'déficit'}).
+                
+                **🎯 Acción:** Implementar datos por categorías para insights más detallados.
+                - **Responsable:** Equipo de Análisis  
+                - **Plazo:** Q4 {latest_year}
+                
+                ---
+                """)
+    
+    # ==============================================
+    # ACCIONES RÁPIDAS
+    # ==============================================
+    
+    st.subheader("⚡ Acciones Rápidas")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("🔄 Actualizar Insights", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+    
+    with col2:
+        if st.button("📊 Ver Datos Detallados", use_container_width=True):
+            st.info("Cambia a la pestaña 'Análisis por Categorías' para explorar datos detallados.")
+    
+    with col3:
+        if st.button("📋 Exportar Resumen", use_container_width=True):
+            st.info("Funcionalidad de exportación disponible próximamente.")
+    
+    # ==============================================
+    # FOOTER INSIGHTS
+    # ==============================================
+    
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.caption("🤖 Insights generados automáticamente")
+    
+    with col2:
+        st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    
+    with col3:
+        if has_prod_kpi:
+            st.caption("✅ Basado en datos KPI completos")
+        else:
+            st.caption("⚠️ Usando datos base")
 
 if __name__ == "__main__":
     main() 
