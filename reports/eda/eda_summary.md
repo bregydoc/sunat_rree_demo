@@ -28,4 +28,4 @@
 - `outliers.html`: Detección de eventos atípicos
 - `dashboard_eda.html`: Dashboard resumen
 
-*Generado el 2025-07-08 12:52:23*
+*Generado el 2025-07-08 13:06:57*

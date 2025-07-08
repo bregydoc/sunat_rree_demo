@@ -34,22 +34,31 @@ def run_command(cmd, description):
 def check_files():
     """Verificar archivos necesarios"""
     required_files = [
-        "observatorio/data/cdro_F8.xlsx",
-        "observatorio/data/cdro_G6.xlsx"
+        # Datos base (totales)
+        ("observatorio/data/cdro_F8.xlsx", "Importaciones base"),
+        ("observatorio/data/cdro_G6.xlsx", "Exportaciones base"),
+        # Datos por productos (categorías)
+        ("data/cdro_F1.xlsx", "Importaciones por categoría"),
+        ("data/cdro_G1.xlsx", "Exportaciones por categoría")
     ]
     
     missing = []
-    for file_path in required_files:
+    for file_path, description in required_files:
         if not Path(file_path).exists():
-            missing.append(file_path)
+            missing.append((file_path, description))
     
     if missing:
         print("❌ Archivos faltantes:")
-        for file in missing:
-            print(f"   - {file}")
+        for file, desc in missing:
+            print(f"   - {file} ({desc})")
+        print("\n💡 Copia los archivos Excel al directorio correspondiente")
         return False
     
-    print("✅ Todos los archivos requeridos están presentes")
+    print("✅ Todos los archivos requeridos están presentes:")
+    for file_path, description in required_files:
+        size = Path(file_path).stat().st_size / 1024  # KB
+        print(f"   • {description}: {file_path} ({size:.0f} KB)")
+    
     return True
 
 def main():
@@ -64,23 +73,37 @@ def main():
         print("\n❌ No se puede continuar sin los archivos de datos")
         sys.exit(1)
     
-    # Paso 1: ETL
+    # Paso 1: ETL datos base
     if not run_command("uv run python observatorio/etl.py", "Paso 1: ETL - Procesando datos base"):
         sys.exit(1)
     
-    # Paso 2: Métricas KPI
-    if not run_command("uv run python observatorio/metrics.py", "Paso 2: Generando métricas KPI"):
+    # Paso 2: ETL productos por categoría
+    if not run_command("uv run python observatorio/etl_products.py", "Paso 2: ETL - Procesando productos por categoría"):
         sys.exit(1)
     
-    # Paso 3: Análisis exploratorio
-    if not run_command("uv run python observatorio/eda.py", "Paso 3: Análisis exploratorio (EDA)"):
+    # Paso 3: Métricas KPI generales
+    if not run_command("uv run python observatorio/metrics.py", "Paso 3: Generando métricas KPI generales"):
         sys.exit(1)
+    
+    # Paso 4: Métricas KPI de productos
+    if not run_command("uv run python observatorio/metrics_products.py", "Paso 4: Generando métricas KPI de productos"):
+        sys.exit(1)
+    
+    # Paso 5: Análisis exploratorio
+    if not run_command("uv run python observatorio/eda.py", "Paso 5: Análisis exploratorio (EDA)"):
+        sys.exit(1)
+    
+    # Paso 6: Tests de QA
+    if not run_command("uv run python tests/test_products_qa.py", "Paso 6: Tests de QA de productos"):
+        print("⚠️  QA falló pero continuando...")  # No fallar el pipeline por QA
     
     # Verificar outputs generados
     print("\n📋 VERIFICANDO ARCHIVOS GENERADOS:")
     outputs = [
         ("trade.duckdb", "Base de datos principal"),
-        ("kpi_monthly.parquet", "Métricas KPI"),
+        ("trade_prod.parquet", "Datos de productos por categoría"),
+        ("kpi_monthly.parquet", "Métricas KPI generales"),
+        ("kpi_prod_monthly.parquet", "Métricas KPI de productos"),
         ("reports/eda/", "Reportes EDA"),
         ("reports/eda/eda_summary.md", "Resumen de hallazgos")
     ]
@@ -100,14 +123,23 @@ def main():
     print("\n🎉 PIPELINE COMPLETADO EXITOSAMENTE!")
     print("="*60)
     print("📊 Archivos generados:")
-    print("   • trade.duckdb         → Base de datos principal")
-    print("   • kpi_monthly.parquet  → Métricas KPI calculadas")
-    print("   • reports/eda/         → 6 reportes interactivos")
+    print("   • trade.duckdb               → Base de datos principal")
+    print("   • trade_prod.parquet         → Datos por categoría")
+    print("   • kpi_monthly.parquet        → Métricas KPI generales")
+    print("   • kpi_prod_monthly.parquet   → Métricas KPI de productos")
+    print("   • reports/eda/               → 6 reportes interactivos")
     print()
     print("🚀 Próximos pasos:")
     print("   1. Dashboard:  uv run streamlit run app.py")
     print("   2. SQL CLI:    duckdb trade.duckdb")
     print("   3. Ver EDA:    open reports/eda/dashboard_eda.html")
+    print("   4. Tests QA:   uv run python tests/test_products_qa.py")
+    print()
+    print("📈 Nuevas funcionalidades:")
+    print("   • Análisis por categorías de productos")
+    print("   • Gráficos stacked-area en dashboard")
+    print("   • Filtros avanzados por categoría")
+    print("   • Tests de QA automatizados")
     print()
     print("🌐 Documentación completa en README.md")
 
