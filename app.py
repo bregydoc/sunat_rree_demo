@@ -122,10 +122,10 @@ def main():
         return
     
     # Pestañas para diferentes análisis
-    tab1, tab2 = st.tabs(["📊 Análisis General", "🏷️ Análisis por Categorías"])
+    tab1, tab2 = st.tabs(["🇵🇪 Análisis por País", "🏷️ Análisis por Categorías"])
     
     with tab1:
-        render_general_analysis(base_df, kpi_df, has_kpi)
+        render_country_analysis(base_df, kpi_df, has_kpi)
     
     with tab2:
         if has_prod:
@@ -134,8 +134,8 @@ def main():
             st.warning("❌ No hay datos de productos disponibles.")
             st.info("💡 Ejecuta: `uv run python observatorio/etl_products.py` para generar datos por categorías")
 
-def render_general_analysis(base_df, kpi_df, has_kpi):
-    """Renderizar análisis general (código original)"""
+def render_country_analysis(base_df, kpi_df, has_kpi):
+    """Renderizar análisis por país (datos agregados nacionales)"""
     
     # Usar KPI si está disponible, sino base
     df = kpi_df if has_kpi else base_df
@@ -151,10 +151,10 @@ def render_general_analysis(base_df, kpi_df, has_kpi):
     df['date'] = pd.to_datetime(df['year'].astype(str) + '-' + df['month_num'].astype(str), format='%Y-%m')
     
     # ==============================================
-    # SIDEBAR - CONTROLES GENERALES
+    # SIDEBAR - CONTROLES POR PAÍS
     # ==============================================
     
-    st.sidebar.header("⚙️ Configuración General")
+    st.sidebar.header("🇵🇪 Configuración País")
     
     # Filtro de años
     min_year, max_year = int(df['year'].min()), int(df['year'].max())
@@ -164,19 +164,19 @@ def render_general_analysis(base_df, kpi_df, has_kpi):
         max_value=max_year,
         value=(max(min_year, max_year-10), max_year),
         step=1,
-        key="general_years"
+        key="country_years"
     )
     
     # Filtro por flujo
-    show_exports = st.sidebar.checkbox("Mostrar Exportaciones", value=True, key="general_exports")
-    show_imports = st.sidebar.checkbox("Mostrar Importaciones", value=True, key="general_imports")
-    show_balance = st.sidebar.checkbox("Mostrar Balance", value=True, key="general_balance")
+    show_exports = st.sidebar.checkbox("Mostrar Exportaciones", value=True, key="country_exports")
+    show_imports = st.sidebar.checkbox("Mostrar Importaciones", value=True, key="country_imports")
+    show_balance = st.sidebar.checkbox("Mostrar Balance", value=True, key="country_balance")
     
     # Tipo de vista
     view_type = st.sidebar.selectbox(
         "Tipo de visualización",
         ["Valores Absolutos", "Índices (2005=100)", "Variaciones %"],
-        key="general_view_type"
+        key="country_view_type"
     )
     
     # Filtrar datos
